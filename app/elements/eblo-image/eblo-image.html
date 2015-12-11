@@ -1,0 +1,308 @@
+<!--
+@license
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../../bower_components/iron-ajax/iron-ajax.html">
+
+<link rel="import" href="../eblo-canvas/eblo-canvas.html">
+<link rel="import" href="../eblo-nominatim/eblo-nominatim.html">
+
+<script type="application/javascript" src="../../scripts/exif.js"></script>
+
+<dom-module id="eblo-image">
+  <template>
+    <style>
+      :host {
+        display: block;
+      }
+    </style>
+    <iron-ajax
+      auto
+      url$="{{ source }}"
+      handle-as="blob"
+      on-response="gotImage"
+      debounce-duration="300">
+    </iron-ajax>
+    <figure>
+      <eblo-nominatim
+        latitude="{{ latitude }}"
+        longitude="{{ longitude }}"
+        on-eblo-nominatim-response="drawNominatim"
+      ></eblo-nominatim>
+      <eblo-canvas
+        id="canvas"
+        address="{{ address }}"
+        date="{{ datetime.date }}"
+        format="{{ format }}"
+        image="{{ getImage(dirty) }}"
+        style$="{{ getWidthHeight(width, height) }}"
+      ></eblo-canvas>
+      <figcaption><content id="content"></content></figcaption>
+    </figure>
+  </template>
+  <script>
+  (function() {
+    'use strict';
+
+    Polymer({
+      is: 'eblo-image',
+
+      listeners: {
+        // https://www.polymer-project.org/1.0/docs/devguide/events.html
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// PROPERTIES ///////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      properties: {
+        source: String,
+
+        dirty: { type: Number, value: 0, notify: true },
+
+        width: { type: Number, value: null, notify: true },
+        height:  { type: Number, value: null, notify: true },
+
+        latitude: { type: Number, value: null, notify: true },
+        longitude:  { type: Number, value: null, notify: true },
+
+        exif: { type: Object, value: null },
+        gypsy: { type: Object, value: null },
+        address: { type: String, value: null, notify: true },
+        datetime: { type: Object, value: null, notify: true },
+
+        format: { type: String, value: '✉ {address} ⌚ {date} ', notify: true },
+
+        image: { type: Object, value: null, notify: true }
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// HELPERS //////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+
+      getWidthHeight: function(width, height) {
+        var style = '';
+        if (width) { style += 'width:' + width + 'px;'; }
+        if (height) { style += 'height:' + height + 'px;'; }
+        return style;
+      },
+
+      adjustWidthHeightByImage: function() {
+        /**
+        *  http://www.daveperrett.com/articles/2012/07/28/exif-orientation-handling-is-a-ghetto/
+        *
+        *      Value	0th Row	0th Column
+        *      1	top	left side
+        *      2	top	right side
+        *      3	bottom	right side
+        *      4	bottom	left side
+        *      5	left side	top
+        *      6	right side	top
+        *      7	right side	bottom
+        *      8	left side	bottom
+        *
+        *  @todo currently we do not handle mirroring
+        *        use scale(-1, 1) for mirroring
+        *        https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/scale
+        */
+        var w = 0, h = 0, a = 0;
+        if (this.image) {
+          switch (this.getExifTag('Orientation')) {
+            case 3:
+              w = this.image.width;
+              h = this.image.height;
+              a = Math.PI;
+              break;
+            case 6:
+              w = this.image.height;
+              h = this.image.width;
+              a = Math.PI / 2.0;
+              break;
+            case 8:
+              w = this.image.height;
+              h = this.image.width;
+              a = - Math.PI / 2.0;
+              break;
+            default:
+              w = this.image.width;
+              h = this.image.height;
+              a = 0;
+              break;
+          }
+        }
+
+        if (this.width && this.height || !this.image) {
+          // do nothing
+        } else if (this.width && w) {
+          this.height = Math.round(h * this.width / w);
+        } else if (this.height && h) {
+          this.width = Math.round(w * this.height / h);
+        } else if (w && h) {
+          this.width = w;
+          this.height = h;
+        }
+
+        if (this.image) {
+          this.image.canvasAngle = a;
+          this.image.canvasWidth = this.width;
+          this.image.canvasHeight = this.height;
+        }
+      },
+
+      getExifTag: function(name) {
+        return this.exif ? this.exif[name] : null;
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// HANDLERS /////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      gotImage: function(evt) {
+        var self = this;
+
+        this.image = new Image();
+        this.image.onload = function() {
+          EXIF.getData(self.image, function() {
+            self.onImageReady();
+            self.getDateTime();
+            self.getExifGypsy();
+          });
+        };
+        this.image.src = URL.createObjectURL(evt.detail.response);
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// NOTIFIERS ////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      getImage: function(dirty) {
+        if (dirty) {
+          return this.image;
+        }
+      },
+
+      onImageReady: function() {
+        if (this.image) {
+          this.exif = EXIF.getAllTags(this.image);
+          this.adjustWidthHeightByImage();
+          this.dirty += 1;
+        }
+
+        this.fire('eblo-image-ready', { image: this.image, exif: this.exif });
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// CALLBACKS ////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      drawNominatim: function(event) {
+        this.address = event.detail.address;
+      },
+
+      getDateTime: function() {
+        this.datetime = this.parseDateTime(this.getExifTag('DateTimeOriginal') || this.getExifTag('GPSDateStamp'));
+      },
+
+      getExifGypsy: function() {
+        // retrieve geo info from image
+        var lat = this.getExifTag('GPSLatitude');
+        var lon = this.getExifTag('GPSLongitude');
+        var alt = this.getExifTag('GPSAltitude');
+        if (lat && lat.constructor === Array && lon && lon.constructor === Array) { // GEO is presented
+          lat[3] = this.getExifTag('GPSLatitudeRef');
+          lon[3] = this.getExifTag('GPSLongitudeRef');
+          this.gypsy = this.parseGypsy([lat, lon, ('1' === this.getExifTag('GPSAltitudeRef')) ? -alt : +alt]);
+          this.latitude = this.gypsy.lat.float;
+          this.longitude = this.gypsy.lon.float;
+        }
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// PRIVATES /////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      parseDateTime: function(timestamp) {
+        if (timestamp && timestamp.length) {
+          var t = timestamp.split(/\s+/);
+          var d = t[0].replace(/[:\/.,]/g, '-');
+          return { date: d, time: t[1], datetime: new Date(d + ' ' + t[1]) };
+        }
+        return null;
+      },
+
+      // Allows input as [l,l], [[ld,lm,ls],[ld,lm,ls],a], "l,l"
+      parseGypsy: function(input) {
+        if (!input) {
+          return;  // no worry
+        }
+
+        var result = { lat: {}, lon: {}, alt: null };
+        var data = (input.constructor === String) ? input.split(/[,;\-\s]+/) : input;
+
+        if (data.constructor !== Array) {
+          console.warn('Bad geo coordinates given. Wrong format, should be Array of String|Array. ');
+          throw input;
+        }
+
+        var pretty = /^((\d+)°)?((\d+)′)?((\d+)″)?([SNEWsnew])?$/;
+        var ss = { lat: ['N','S'], lon: ['E', 'W'] };
+        ['lat', 'lon'].forEach(function(l, i) {
+          switch (data[i].constructor) {
+            case Array:
+              result[l].deg = data[i][0] || 0;
+              result[l].min = data[i][1] || 0;
+              result[l].sec = Math.floor(data[i][2] || 0);
+              result[l].semisphere = data[i][3] || ss[l][0];
+              break;
+            case String:
+              data[i] = data[i].match(pretty) || +data[i];
+              break;
+            case Number:
+              if (data[i].constructor === Array) { // pretty
+                result[l].pretty = data[i];
+                result[l].deg = data[i][2] || 0;
+                result[l].min = data[i][4] || 0;
+                result[l].sec = data[i][6] || 0;
+                result[l].semisphere = data[i][7] || ss[l][0];
+              } else {                             // float
+                result[l].float = data[i];
+                result[l].deg = Math.floor(data[i]);
+                result[l].min = Math.floor((data[i] - result[l].deg) * 60);
+                result[l].sec = Math.floor(((data[i] - result[l].deg) * 60 - result[l].min) * 60);
+                result[l].semisphere = ss[l][+(+data[i] === -data[i])];
+              }
+              break;
+            default:
+              console.warn('Bad geo coordinates given. Wrong format, should be Array of String|Array. ', this.latlon);
+              throw input;
+          }
+          if (!result[l].float) {
+            result[l].float = (
+              result[l].deg + result[l].min/60.0 + result[l].sec/3600.0
+            ) * (result[l].semisphere === ss[l][0] ? 1 : -1);
+          }
+          if (result[l].float < -90.0 || result[l].float > 90.0) {
+            throw 'Irrelevant geolocation: [' + l + '=' + result[l].float + ']. Geodata is corrupted.';
+          }
+          if (!result[l].pretty) {
+            result[l].pretty = '' + result[l].deg + '°' + result[l].min + '′' + result[l].sec + '″' + result[l].semisphere;
+          }
+        });
+        // altitude
+        if (data.length > 2) {
+          result.alt = data[2];
+        }
+        result.pretty = [result.lat.pretty, result.lon.pretty].join(',');
+        result.floats = [result.lat.float, result.lon.float].join(',');
+        result.links = {
+          osm: 'https://www.openstreetmap.org/#map=18/' + result.lat.float + '/' + result.lon.float,
+          google: 'https://www.google.com/maps/place/' + result.lat.pretty + '+' + result.lon.pretty
+        };
+        return result;
+      }
+    });
+  })();
+  </script>
+</dom-module>

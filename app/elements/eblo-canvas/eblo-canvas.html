@@ -1,0 +1,253 @@
+<!--
+@license
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<script type="application/javascript" src="../../bower_components/caman/dist/caman.full.js"></script>
+
+<dom-module id="eblo-canvas">
+  <template>
+    <style>
+      :host {
+        display: block;
+      }
+      #container { width: 100%; height: 100%; background: transparent; }
+    </style>
+    <div id="container"></div>
+  </template>
+  <script>
+  (function() {
+    'use strict';
+
+    Polymer({
+      is: 'eblo-canvas',
+
+      //////////////////////////////////////////////////////////////////////////
+      /// PROPERTIES ///////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      properties: {
+        image: {
+          type: Object,
+          value: null,
+          notify: true,
+          observer: 'onImageChanged'
+        },
+
+        format: {
+          type: String,
+          value: '✎ {caption} © {master} ✉ {address} ⌚ {date} ',
+          notify: true,
+          observer: 'onCamanify'
+        },
+        caption: {
+          type: String,
+          value: null,
+          notify: true,
+          observer: 'onCamanify'
+        },
+        master: {
+          type: String,
+          value: null,
+          notify: true,
+          observer: 'onCamanify'
+        },
+        address: {
+          type: String,
+          value: null,
+          notify: true,
+          observer: 'onCamanify'
+        },
+        date: {
+          type: String,
+          value: null,
+          notify: true,
+          observer: 'onCamanify'
+        },
+
+        canvas: Object,
+
+        dirty:      { type: Number, value: 0, notify: true, observer: 'onRedraw' },
+
+        preset:     { type: String, value: null, notify: true, observer: 'onCamanify' },
+
+        brightness: { type: Number, value: 0, notify: true, observer: 'onCamanify' },
+        clip:       { type: Number, value: 0, notify: true, observer: 'onCamanify' },
+        contrast:   { type: Number, value: 0, notify: true, observer: 'onCamanify' },
+        exposure:   { type: Number, value: 0, notify: true, observer: 'onCamanify' },
+        gamma:      { type: Number, value: 1, notify: true, observer: 'onCamanify' },
+        greyscale:  { type: Boolean, value: false, notify: true, observer: 'onCamanify' },
+        hue:        { type: Number, value: 0, notify: true, observer: 'onCamanify' },
+        invert:     { type: Boolean, value: false, notify: true, observer: 'onCamanify' },
+        noise:      { type: Number, value: 0, notify: true, observer: 'onCamanify' },
+        saturation: { type: Number, value: 0, notify: true, observer: 'onCamanify' },
+        sepia:      { type: Number, value: 0, notify: true, observer: 'onCamanify' },
+        sharpen:    { type: Number, value: 15, notify: true, observer: 'onCamanify' },
+        vibrance:   { type: Number, value: 20, notify: true, observer: 'onCamanify' },
+
+        arabesques: {
+          type: Object,
+          notify: true,
+          observer: 'onCamanify',
+          value: {
+            font: '12px Ubuntu, sans-serif',
+            color: 'rgba(255, 255, 255, 0.9)',
+            stroke: 'rgba(0, 0, 0, 1)',
+            shadow: {
+              blur: 4,
+              color: 'black'
+            },
+            lineWidth: 1
+          }
+        }
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// HELPERS //////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+
+      drawCaption: function() {
+        if (!this.canvas || this.canvas.constructor !== HTMLCanvasElement || this.format === '') {
+          return;
+        }
+
+        var ctx = this.canvas.getContext('2d');
+        var text = this.format.replace(/\{[cC]\w*?\}/g, this.caption || '')
+                              .replace(/\{[mM]\w*?\}/g, this.master || '')
+                              .replace(/\{[aA]\w*?\}/g, this.address || '')
+                              .replace(/\{[dD]\w*?\}/g, this.date || '')
+                              .replace(/[^\p{S}]  /g, '')
+                              .trim();
+
+        if (!text) {
+          return;
+        }
+
+        this.adjustArabesques();
+
+        ctx.save();
+        // prepare settings for the future
+        ctx.font = this.arabesques.font;
+        ctx.fillStyle = this.arabesques.color;
+        ctx.strokeStyle = this.arabesques.stroke;
+        ctx.shadowColor = this.arabesques.shadow.color;
+        ctx.shadowBlur = this.arabesques.shadow.blur;
+        ctx.lineWidth = this.arabesques.lineWidth;
+        ctx.translate(this.canvas.width, this.canvas.height);
+        ctx.rotate(- Math.PI / 2);
+        ctx.strokeText(text, this.canvas.height - ctx.measureText(text).width - 6, -6);
+        ctx.shadowBlur = 0;
+        ctx.fillText(text, this.canvas.height - ctx.measureText(text).width - 6, -6);
+        ctx.restore();
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// HANDLERS /////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+
+      onImageChanged: function(neu) {
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.position = 'absolute';
+
+        // We do not leave old canvas stacked in the container to be able to quickly undo
+        while (this.$.container.firstChild) { this.$.container.removeChild(this.$.container.firstChild); }
+        this.$.container.appendChild(this.canvas);
+        if (!neu) {
+          return; // no new image
+        }
+
+        this.canvas.width = neu.canvasWidth || neu.width;
+        this.canvas.height = neu.canvasHeight || neu.height;
+
+        // draw image with proper orientation
+        var ctx = this.canvas.getContext('2d');
+        ctx.save();
+        // FIXME probably it’s better to scale image itself!
+        ctx.scale(this.canvas.width / neu.width, this.canvas.height / neu.height);
+        if (neu.canvasAngle) {
+          ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
+          ctx.rotate(neu.canvasAngle);
+          ctx.drawImage(this.image, -this.canvas.height / 2, -this.canvas.width / 2);
+        } else {
+          ctx.drawImage(this.image, 0, 0);
+        }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.restore();
+
+        this.dirty += 1;
+      },
+
+      onCamanify: function() {
+        if (this.dirty) {
+          this.dirty += 1;
+        }
+      },
+
+      onRedraw: function() {
+        if (!this.canvas || this.canvas.constructor !== HTMLCanvasElement || !this.canvas.width || !this.canvas.height) {
+          return;
+        }
+
+        var self = this;
+        Caman(this.canvas, function() {
+          var cmn = this;
+          // start with preset
+          if (self.preset) {
+            cmn[self.preset]();
+          }
+          // valued properties
+          [
+            'brightness', 'channels', 'clip', 'colorize', 'contrast',
+            'exposure', 'gamma', 'hue', 'noise', 'sepia', 'sharpen',
+            'saturation', 'vibrance'
+          ].forEach(function(attr) {
+            if (self[attr]) {
+              cmn[attr](self[attr]);
+            }
+          });
+          // methods
+          [
+            'greyscale', 'invert'
+          ].forEach(function(attr) {
+            if (self[attr]) {
+              cmn[attr]();
+            }
+          });
+          // FIXME custom filters (simply by name)
+          cmn.render(function() {
+            self.canvas = this.canvas;
+          //  self.canvas.style.zIndex = +self.canvas.getAttribute('data-caman-id') + 1;
+            self.drawCaption();
+            self.fire('eblo-canvas-changed', { canvas: self.canvas });
+          });
+        });
+      },
+
+      adjustArabesques: function() {
+        var fontName = this.arabesques.font ? this.arabesques.font.replace(/\d+/, '') : 'px Impact, fantasy';
+
+        var fontSize = Number.parseInt(this.arabesques.font) || 12;
+        var blurSize = this.arabesques.shadow.blur || 4;
+
+        var minWH = Math.min(this.canvas.width, this.canvas.height);
+        if (minWH < 600) {
+          fontSize = 13 - Math.round(3 * Math.log2(600 / minWH));
+          if (fontSize < 6) {
+            fontSize = 6;
+          }
+          blurSize = Math.round(fontSize / 4);
+        }
+        this.arabesques.font = fontSize + fontName;
+        this.arabesques.shadow.blur = blurSize;
+      }
+
+    });
+  })();
+  </script>
+</dom-module>
