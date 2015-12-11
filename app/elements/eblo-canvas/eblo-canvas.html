@@ -37,7 +37,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           type: Object,
           value: null,
           notify: true,
-          observer: 'onImageChanged'
+          observer: 'onRedraw'
         },
 
         format: {
@@ -72,8 +72,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         },
 
         canvas: Object,
-
-        dirty:      { type: Number, value: 0, notify: true, observer: 'onRedraw' },
 
         preset:     { type: String, value: null, notify: true, observer: 'onCamanify' },
 
@@ -112,6 +110,30 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       /// HELPERS //////////////////////////////////////////////////////////////
       //////////////////////////////////////////////////////////////////////////
 
+      drawImage: function() {
+        if (!this.canvas || this.canvas.constructor !== HTMLCanvasElement || !this.image) {
+          return;
+        }
+
+        this.canvas.width = this.image.canvasWidth || this.image.width;
+        this.canvas.height = this.image.canvasHeight || this.image.height;
+
+        // draw image with proper orientation
+        var ctx = this.canvas.getContext('2d');
+        ctx.save();
+        // FIXME probably it’s better to scale image itself!
+        ctx.scale(this.canvas.width / this.image.width, this.canvas.height / this.image.height);
+        if (this.image.canvasAngle) {
+          ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
+          ctx.rotate(neu.canvasAngle);
+          ctx.drawImage(this.image, -this.canvas.height / 2, -this.canvas.width / 2);
+        } else {
+          ctx.drawImage(this.image, 0, 0);
+        }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.restore();
+      },
+
       drawCaption: function() {
         if (!this.canvas || this.canvas.constructor !== HTMLCanvasElement || this.format === '') {
           return;
@@ -147,51 +169,35 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         ctx.restore();
       },
 
+      recanvas: function() {
+        // We do leave old canvas stacked in the container to be able to quickly undo
+        // while (this.$.container.firstChild) { this.$.container.removeChild(this.$.container.firstChild); }
+        if (this.canvas) {
+          this.canvas.style.zIndex = +this.canvas.getAttribute('data-caman-id') + 1;
+          this.$.container.appendChild(this.canvas);
+        }
+      },
+
       //////////////////////////////////////////////////////////////////////////
       /// HANDLERS /////////////////////////////////////////////////////////////
       //////////////////////////////////////////////////////////////////////////
 
-      onImageChanged: function(neu) {
-        this.canvas = document.createElement('canvas');
-        this.canvas.style.position = 'absolute';
-
-        // We do not leave old canvas stacked in the container to be able to quickly undo
-        while (this.$.container.firstChild) { this.$.container.removeChild(this.$.container.firstChild); }
-        this.$.container.appendChild(this.canvas);
-        if (!neu) {
-          return; // no new image
-        }
-
-        this.canvas.width = neu.canvasWidth || neu.width;
-        this.canvas.height = neu.canvasHeight || neu.height;
-
-        // draw image with proper orientation
-        var ctx = this.canvas.getContext('2d');
-        ctx.save();
-        // FIXME probably it’s better to scale image itself!
-        ctx.scale(this.canvas.width / neu.width, this.canvas.height / neu.height);
-        if (neu.canvasAngle) {
-          ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
-          ctx.rotate(neu.canvasAngle);
-          ctx.drawImage(this.image, -this.canvas.height / 2, -this.canvas.width / 2);
-        } else {
-          ctx.drawImage(this.image, 0, 0);
-        }
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.restore();
-
-        this.dirty += 1;
-      },
-
       onCamanify: function() {
-        if (this.dirty) {
-          this.dirty += 1;
-        }
+        this.debounce('eblo-canvas-draw', function() { this.onRedraw(); }, 300); // 0.3 sec
       },
 
       onRedraw: function() {
-        if (!this.canvas || this.canvas.constructor !== HTMLCanvasElement || !this.canvas.width || !this.canvas.height) {
+        if (!this.image) {
           return;
+        }
+
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.position = 'absolute';
+
+        this.drawImage();
+
+        if (!this.$.container.firstChild) {
+          this.$.container.appendChild(this.canvas); // show image if there is an empty container
         }
 
         var self = this;
@@ -222,7 +228,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           // FIXME custom filters (simply by name)
           cmn.render(function() {
             self.canvas = this.canvas;
-          //  self.canvas.style.zIndex = +self.canvas.getAttribute('data-caman-id') + 1;
+            self.recanvas();
             self.drawCaption();
             self.fire('eblo-canvas-changed', { canvas: self.canvas });
           });

@@ -37,11 +37,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         longitude: { type: String, value: null, notify: true, observer: 'enqueueRequest' },
         language: { type: String, value: 'es', notify: true, observer: 'enqueueRequest' },
         zoom: { type: Number, value: 18, notify: true, observer: 'enqueueRequest' },
-        latency: 1000
+        latency: { type: Number, value: 300, notify: true, observer: 'enqueueRequest' }
       },
 
       enqueueRequest: function() {
-        this.async(function() { this.performRequest(); }, this.latency);
+        this.debounce('eblo-nominatim-get-address', function() { this.performRequest(); }, this.latency);
       },
 
       performRequest: function() {
@@ -53,7 +53,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       gotAddress: function(event) {
         var response = event.detail.xhr.response;
 
-        if(!response) {
+        if(!response || !response.address) {
           return false;
         }
         var address = '';
