@@ -125,7 +125,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         ctx.scale(this.canvas.width / this.image.width, this.canvas.height / this.image.height);
         if (this.image.canvasAngle) {
           ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
-          ctx.rotate(neu.canvasAngle);
+          ctx.rotate(this.canvas.canvasAngle);
           ctx.drawImage(this.image, -this.canvas.height / 2, -this.canvas.width / 2);
         } else {
           ctx.drawImage(this.image, 0, 0);
@@ -200,6 +200,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           this.$.container.appendChild(this.canvas); // show image if there is an empty container
         }
 
+        /* jshint ignore:start */
         var self = this;
         Caman(this.canvas, function() {
           var cmn = this;
@@ -233,6 +234,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             self.fire('eblo-canvas-changed', { canvas: self.canvas });
           });
         });
+        /* jshint ignore:end */
       },
 
       adjustArabesques: function() {

@@ -10,17 +10,29 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
 <link rel="import" href="../../bower_components/polymer/polymer.html">
 <link rel="import" href="../../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../../bower_components/iron-icons/iron-icons.html">
 
 <link rel="import" href="../eblo-canvas/eblo-canvas.html">
 <link rel="import" href="../eblo-nominatim/eblo-nominatim.html">
 
-<script type="application/javascript" src="../../scripts/exif.js"></script>
+<script type="application/javascript" src="../../bower_components/exif-js/exif.js"></script>
 
 <dom-module id="eblo-image">
   <template>
     <style>
       :host {
         display: block;
+      }
+
+      paper-icon-button {
+        top: 2px;
+        left: 2px;
+        z-index: 10002;
+        margin-right: -48px;
+        margin-bottom: -48px;
+        color: rgba(200, 200, 200, 0.5);
+        --paper-icon-button-ink-color: var(--paper-indigo-a200) !important;
+        };
       }
     </style>
     <iron-ajax
@@ -34,8 +46,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <eblo-nominatim
         latitude="{{ latitude }}"
         longitude="{{ longitude }}"
-        on-eblo-nominatim-response="drawNominatim"
+        on-eblo-nominatim-response="onNominatim"
       ></eblo-nominatim>
+      <paper-icon-button toggles raised
+        icon="star"
+        class="eblo-x16"
+        on-click="openMaps"
+      ></paper-icon-button>
       <eblo-canvas
         id="canvas"
         address="{{ address }}"
@@ -75,6 +92,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         exif: { type: Object, value: null },
         gypsy: { type: Object, value: null },
+        description: { type: String, value: null, notify: true },
         address: { type: String, value: null, notify: true },
         datetime: { type: Object, value: null, notify: true },
 
@@ -164,17 +182,26 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       /// HANDLERS /////////////////////////////////////////////////////////////
       //////////////////////////////////////////////////////////////////////////
       gotImage: function(evt) {
+        /* jshint ignore:start */
         var self = this;
 
         this.image = new Image();
         this.image.onload = function() {
           EXIF.getData(self.image, function() {
-            self.onImageReady();
-            self.getDateTime();
-            self.getExifGypsy();
+            self.async(function() { self.getExifData(); });
+            self.async(function() { self.getDateTime(); });
+            self.async(function() { self.getExifGypsy(); });
+            self.async(function() { self.getExifDescription(); });
           });
         };
+        /* jshint ignore:end */
         this.image.src = URL.createObjectURL(evt.detail.response);
+      },
+
+      openMaps: function() {
+        if (this.gypsy) {
+          window.open(this.gypsy.links.google, '_blank');
+        }
       },
 
       //////////////////////////////////////////////////////////////////////////
@@ -186,25 +213,23 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       },
 
-      onImageReady: function() {
+      getExifData: function() {
         if (this.image) {
+          /* jshint ignore:start */
           this.exif = EXIF.getAllTags(this.image);
+          /* jshint ignore:end */
           this.adjustWidthHeightByImage();
           this.dirty += 1;
         }
 
-        this.fire('eblo-image-ready', { image: this.image, exif: this.exif });
-      },
-
-      //////////////////////////////////////////////////////////////////////////
-      /// CALLBACKS ////////////////////////////////////////////////////////////
-      //////////////////////////////////////////////////////////////////////////
-      drawNominatim: function(event) {
-        this.address = event.detail.address;
+        this.fire('eblo-exif-ready', { image: this.image, exif: this.exif });
       },
 
       getDateTime: function() {
         this.datetime = this.parseDateTime(this.getExifTag('DateTimeOriginal') || this.getExifTag('GPSDateStamp'));
+        if (this.datetime) {
+          this.fire('eblo-datetime-ready', { datetime: this.datetime });
+        }
       },
 
       getExifGypsy: function() {
@@ -218,6 +243,24 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           this.gypsy = this.parseGypsy([lat, lon, ('1' === this.getExifTag('GPSAltitudeRef')) ? -alt : +alt]);
           this.latitude = this.gypsy.lat.float;
           this.longitude = this.gypsy.lon.float;
+          this.fire('eblo-gypsy-ready', { gypsy: this.gypsy });
+        }
+      },
+
+      getExifDescription: function() {
+        this.description = this.parseImageDescription();
+        if (this.description) {
+          this.fire('eblo-description-ready', { description: this.description });
+        }
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// CALLBACKS ////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      onNominatim: function(event) {
+        this.address = event.detail.address;
+        if (this.address) {
+          this.fire('eblo-address-ready', { address: event.detail.response });
         }
       },
 
@@ -299,9 +342,47 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         result.floats = [result.lat.float, result.lon.float].join(',');
         result.links = {
           osm: 'https://www.openstreetmap.org/#map=18/' + result.lat.float + '/' + result.lon.float,
-          google: 'https://www.google.com/maps/place/' + result.lat.pretty + '+' + result.lon.pretty
+          google: 'https://www.google.com/maps/place/' + result.lat.pretty + '+' + result.lon.pretty,
+          googleZoom18: 'https://www.google.com/maps/place/@' + result.lat.float + ',' + result.lon.float + ',18z'
         };
         return result;
+      },
+
+      parseImageDescription: function() {
+        /* jshint ignore:start */
+        // retrieve comment from image
+        var comment = this.getExifTag('ImageDescription');
+        if (comment && comment.length > 0) { // byte array ⇒ utf8
+          var i = 0;
+          var c0 = 0;
+          var c2 = 0;
+          var c3 = 0;
+          var result = '';
+          while( i < comment.length ) {
+            c0 = comment.charCodeAt(i) & 0xff;
+            if( c0 < 128 ) {
+              result += String.fromCharCode(c0);
+              i++;
+            } else if( (c0 > 191) && (c0 < 224) ) {
+              if( i+1 >= comment.length ) {
+                throw 'Bad UTF-8 content in ImageDescription (step 1). Skipping...';
+              }
+              c2 = comment.charCodeAt(i+1)&0xff;
+              result += String.fromCharCode( ((c0&31)<<6) | (c2&63) );
+              i+=2;
+            } else {
+              if( i+2 >= comment.length  || i+1 >= comment.length ) {
+                throw 'Bad UTF-8 content in ImageDescription (step 2). Skipping...';
+              }
+              c2 = comment.charCodeAt(i+1) & 0xff;
+              c3 = comment.charCodeAt(i+2) & 0xff;
+              result += String.fromCharCode( ((c0&15)<<12) | ((c2&63)<<6) | (c3&63) );
+              i+=3;
+            }
+          }
+          return result;
+        }
+        /* jshint ignore:end */
       }
     });
   })();

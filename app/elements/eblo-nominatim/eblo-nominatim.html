@@ -65,9 +65,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         if (response.address.street || response.address.road || response.address.pedestrian) {
           address += ', ' + (response.address.street || response.address.road || response.address.pedestrian);
         }
+        /* jshint ignore:start */
         if (response.address.house_number) {
           address += ', ' + response.address.house_number;
         }
+        /* jshint ignore:end */
 
         this.fire('eblo-nominatim-response', { response: response, address: address });
       }
