@@ -9,6 +9,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 -->
 
 <link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../../bower_components/iron-resizable-behavior/iron-resizable-behavior.html">
 <link rel="import" href="../../bower_components/iron-ajax/iron-ajax.html">
 <link rel="import" href="../../bower_components/iron-icons/iron-icons.html">
 
@@ -21,7 +22,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
   <template>
     <style>
       :host {
-        display: block;
+        display: inline-block;
+        margin-bottom: 1.4em;
       }
 
       paper-icon-button {
@@ -72,8 +74,22 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     Polymer({
       is: 'eblo-image',
 
+      behaviors: [
+        Polymer.IronResizableBehavior
+      ],
+
       listeners: {
-        // https://www.polymer-project.org/1.0/docs/devguide/events.html
+        'iron-resize': 'onIronResize'
+      },
+
+      //////////////////////////////////////////////////////////////////////////
+      /// GETTERS //////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      get parent() {
+        if (this.parentNode.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+          return this.parentNode.host;
+        }
+        return this.parentNode;
       },
 
       //////////////////////////////////////////////////////////////////////////
@@ -261,6 +277,26 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.address = event.detail.address;
         if (this.address) {
           this.fire('eblo-address-ready', { address: event.detail.response });
+        }
+      },
+
+      onIronResize: function(evt) {
+        var w = Math.floor(this.parent.offsetWidth - 60);
+
+        if (this.image && this.image.width <= w) {
+          return;
+        }
+
+        if (this.parent.offsetWidth) {
+          // TODO use scale on underlying canvas!!!
+          var ratio = this.height / this.width;
+          this.width = w;
+          this.height = Math.floor(ratio * w);
+          if (this.image) {
+            this.image.canvasWidth = this.width;
+            this.image.canvasHeight = this.height;
+            this.$.canvas.onCamanify();
+          }
         }
       },
 

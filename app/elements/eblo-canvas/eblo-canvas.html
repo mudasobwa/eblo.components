@@ -171,7 +171,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       recanvas: function() {
         // We do leave old canvas stacked in the container to be able to quickly undo
-        // while (this.$.container.firstChild) { this.$.container.removeChild(this.$.container.firstChild); }
+        while (this.$.container.firstChild) { this.$.container.removeChild(this.$.container.firstChild); }
         if (this.canvas) {
           this.canvas.style.zIndex = +this.canvas.getAttribute('data-caman-id') + 1;
           this.$.container.appendChild(this.canvas);
