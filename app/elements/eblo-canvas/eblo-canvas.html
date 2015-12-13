@@ -121,7 +121,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         // draw image with proper orientation
         var ctx = this.canvas.getContext('2d');
         // FIXME probably it’s better to scale image itself!
-        ctx.scale(this.canvas.width / this.image.canvasWidth, this.canvas.height / this.image.canvasHeight);
+        ctx.scale(this.image.canvasRatio.w, this.image.canvasRatio.h);
         if (this.image.canvasAngle) {
           ctx.translate(this.image.canvasWidth / 2, this.image.canvasHeight / 2);
           ctx.rotate(this.image.canvasAngle);

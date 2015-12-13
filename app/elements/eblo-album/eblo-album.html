@@ -21,31 +21,25 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
   </style>
   <template>
     <div>
-      <paper-tabs selected="{{selected}}">
-        <paper-tab>Tab 1</paper-tab>
-        <paper-tab>Tab 2</paper-tab>
-      </paper-tabs>
 
-      <iron-pages selected="{{selected}}">
-        <eblo-image
-          source="images/tests/600_20150104_115011.jpg"
-          on-eblo-gypsy-ready="ebloGypsyReady"
-          width="600px"
-        >Redistributions in binary form must reproduce the above
-        copyright notice, this list of conditions and the following disclaimer
-        in the documentation and/or other materials provided with the
-        distribution.</eblo-image>
-        <eblo-image
-          source="images/tests/600_20150104_120011.jpg"
-          on-eblo-gypsy-ready="ebloGypsyReady"
-          width="600px"
-        >Second.</eblo-image>
-      </iron-pages>
+      <eblo-image
+        source="images/tests/600_20150104_115011.jpg"
+        on-eblo-gypsy-ready="ebloGypsyReady"
+        width="600px"
+      >Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following disclaimer
+      in the documentation and/or other materials provided with the
+      distribution.</eblo-image>
+      <eblo-image
+        source="images/tests/600_20150104_120011.jpg"
+        on-eblo-gypsy-ready="ebloGypsyReady"
+        width="600px"
+      >Second.</eblo-image>
 
-      <leaflet-map>
-  			<leaflet-geolocation watch enable-high-accuracy
+      <leaflet-map fit-to-markers zoom="12">
+  			<!--leaflet-geolocation watch enable-high-accuracy
   				latitude="{{ latitude }}" longitude="{{ longitude }}" accuracy="{{ accuracy }}">
-  			</leaflet-geolocation>
+  			</leaflet-geolocation-->
 
   			<template is="dom-if" if="{{latitude}}">
   				<leaflet-circle latitude="{{latitude}}" longitude="{{longitude}}" radius="{{accuracy}}" color="#d00">
@@ -68,16 +62,24 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     is: 'eblo-album',
 
     properties: {
-      selected: 0,
+      selected:  { type: Number, value: null, notify: true },
 
-      latitude:  { type: Number, value: null, notify: true },
-      longitude: { type: Number, value: null, notify: true },
+      latitude:  { type: Number, value: 0, notify: true },
+      longitude: { type: Number, value: 0, notify: true },
       accuracy:  { type: Number, value: 50, notify: true },
       points:    { type: Array, value: [], notify: true }
     },
 
+    ready: function() {
+//      this.$.tabs.assignParentResizable(this);
+      this.selected = 0;
+      /* jshint ignore:start */
+      L.Icon.Default.imagePath = '../../bower_components/leaflet/dist/images';
+      /* jshint ignore:end */
+    },
+
     ebloGypsyReady: function(evt) {
-      this.points.push( { latitude: evt.detail.gypsy.lat.float, longitude: evt.detail.gypsy.lon.float } );
+      this.push( 'points', { latitude: evt.detail.gypsy.lat.float, longitude: evt.detail.gypsy.lon.float } );
       this.recalcLatLon();
     },
 
