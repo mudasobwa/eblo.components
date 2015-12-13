@@ -18,7 +18,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       :host {
         display: block;
       }
-      :host #container { width: 100%; height: 100%; background: transparent; }
     </style>
     <div id="container"></div>
   </template>
@@ -39,6 +38,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           notify: true,
           observer: 'onRedraw'
         },
+        width: { type: Number, value: null, notify: true, observer: 'onCamanify' },
 
         format: {
           type: String,
@@ -115,17 +115,23 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           return;
         }
 
-        this.canvas.width = this.image.canvasWidth || this.image.width;
-        this.canvas.height = this.image.canvasHeight || this.image.height;
+        // calc proper rectangle here
+        var source = this.image.dimensions;
+        var ratio = Math.min(this.width / source.w, 1.0);
+
+        this.canvas.width = source.w * ratio;
+        this.canvas.height = source.h * ratio;
+
+        var target = { w: this.canvas.width, h: this.canvas.height };
 
         // draw image with proper orientation
         var ctx = this.canvas.getContext('2d');
         // FIXME probably it’s better to scale image itself!
-        ctx.scale(this.image.canvasRatio.w, this.image.canvasRatio.h);
-        if (this.image.canvasAngle) {
-          ctx.translate(this.image.canvasWidth / 2, this.image.canvasHeight / 2);
-          ctx.rotate(this.image.canvasAngle);
-          ctx.drawImage(this.image, -this.image.canvasHeight / 2, -this.image.canvasWidth / 2);
+        ctx.scale(ratio, ratio);
+        if (this.image.angle) {
+          ctx.translate(target.w / 2, target.h / 2);
+          ctx.rotate(this.image.angle);
+          ctx.drawImage(this.image, -target.h / 2, -target.w / 2);
         } else {
           ctx.drawImage(this.image, 0, 0);
         }
@@ -181,7 +187,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       //////////////////////////////////////////////////////////////////////////
 
       onCamanify: function() {
-        this.debounce('eblo-canvas-draw', function() { this.onRedraw(); }, 300); // 0.3 sec
+        this.async(function() { this.onRedraw(); });
       },
 
       onRedraw: function() {
@@ -200,38 +206,40 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         /* jshint ignore:start */
         var self = this;
-        Caman(this.canvas, function() {
-          var cmn = this;
-          // start with preset
-          if (self.preset) {
-            cmn[self.preset]();
-          }
-          // valued properties
-          [
-            'brightness', 'channels', 'clip', 'colorize', 'contrast',
-            'exposure', 'gamma', 'hue', 'noise', 'sepia', 'sharpen',
-            'saturation', 'vibrance'
-          ].forEach(function(attr) {
-            if (self[attr]) {
-              cmn[attr](self[attr]);
+        this.debounce('eblo-caman-draw', function() {
+          Caman(self.canvas, function() {
+            var cmn = this;
+            // start with preset
+            if (self.preset) {
+              cmn[self.preset]();
             }
+            // valued properties
+            [
+              'brightness', 'channels', 'clip', 'colorize', 'contrast',
+              'exposure', 'gamma', 'hue', 'noise', 'sepia', 'sharpen',
+              'saturation', 'vibrance'
+            ].forEach(function(attr) {
+              if (self[attr]) {
+                cmn[attr](self[attr]);
+              }
+            });
+            // methods
+            [
+              'greyscale', 'invert'
+            ].forEach(function(attr) {
+              if (self[attr]) {
+                cmn[attr]();
+              }
+            });
+            // FIXME custom filters (simply by name)
+            cmn.render(function() {
+              self.canvas = this.canvas;
+              self.recanvas();
+              self.drawCaption();
+              self.fire('eblo-canvas-changed', { canvas: self.canvas });
+            });
           });
-          // methods
-          [
-            'greyscale', 'invert'
-          ].forEach(function(attr) {
-            if (self[attr]) {
-              cmn[attr]();
-            }
-          });
-          // FIXME custom filters (simply by name)
-          cmn.render(function() {
-            self.canvas = this.canvas;
-            self.recanvas();
-            self.drawCaption();
-            self.fire('eblo-canvas-changed', { canvas: self.canvas });
-          });
-        });
+        }, 300); // 0.3 sec
         /* jshint ignore:end */
       },
 
