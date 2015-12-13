@@ -18,7 +18,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       :host {
         display: block;
       }
-      #container { width: 100%; height: 100%; background: transparent; }
+      :host #container { width: 100%; height: 100%; background: transparent; }
     </style>
     <div id="container"></div>
   </template>
@@ -120,18 +120,16 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         // draw image with proper orientation
         var ctx = this.canvas.getContext('2d');
-        ctx.save();
         // FIXME probably it’s better to scale image itself!
-        ctx.scale(this.canvas.width / this.image.width, this.canvas.height / this.image.height);
+        ctx.scale(this.canvas.width / this.image.canvasWidth, this.canvas.height / this.image.canvasHeight);
         if (this.image.canvasAngle) {
-          ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
-          ctx.rotate(this.canvas.canvasAngle);
-          ctx.drawImage(this.image, -this.canvas.height / 2, -this.canvas.width / 2);
+          ctx.translate(this.image.canvasWidth / 2, this.image.canvasHeight / 2);
+          ctx.rotate(this.image.canvasAngle);
+          ctx.drawImage(this.image, -this.image.canvasHeight / 2, -this.image.canvasWidth / 2);
         } else {
           ctx.drawImage(this.image, 0, 0);
         }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.restore();
       },
 
       drawCaption: function() {

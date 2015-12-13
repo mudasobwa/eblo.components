@@ -1,0 +1,99 @@
+<!--
+@license
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="../../bower_components/iron-pages/iron-pages.html">
+<link rel="import" href="../../bower_components/paper-tabs/paper-tabs.html">
+<link rel="import" href="../../bower_components/leaflet-map/leaflet-map.html">
+
+<dom-module id="eblo-album">
+  <style>
+    :host { display: block; overflow: hidden; }
+    :host leaflet-map { height: 18em; width: 99%; border: none; }
+  </style>
+  <template>
+    <div>
+      <paper-tabs selected="{{selected}}">
+        <paper-tab>Tab 1</paper-tab>
+        <paper-tab>Tab 2</paper-tab>
+      </paper-tabs>
+
+      <iron-pages selected="{{selected}}">
+        <eblo-image
+          source="images/tests/600_20150104_115011.jpg"
+          on-eblo-gypsy-ready="ebloGypsyReady"
+          width="600px"
+        >Redistributions in binary form must reproduce the above
+        copyright notice, this list of conditions and the following disclaimer
+        in the documentation and/or other materials provided with the
+        distribution.</eblo-image>
+        <eblo-image
+          source="images/tests/600_20150104_120011.jpg"
+          on-eblo-gypsy-ready="ebloGypsyReady"
+          width="600px"
+        >Second.</eblo-image>
+      </iron-pages>
+
+      <leaflet-map>
+  			<leaflet-geolocation watch enable-high-accuracy
+  				latitude="{{ latitude }}" longitude="{{ longitude }}" accuracy="{{ accuracy }}">
+  			</leaflet-geolocation>
+
+  			<template is="dom-if" if="{{latitude}}">
+  				<leaflet-circle latitude="{{latitude}}" longitude="{{longitude}}" radius="{{accuracy}}" color="#d00">
+  				</leaflet-circle>
+  			</template>
+
+        <template is="dom-repeat" items="{{ points }}">
+          <leaflet-marker latitude="{{ item.latitude }}" longitude="{{ item.longitude }}">
+            I am within <span>{{ accuracy }}</span> meters of this location.
+          </leaflet-marker>
+        </template>
+		</leaflet-map>
+
+    </div>
+  </template>
+</dom-module>
+<script>
+(function() {
+  Polymer({
+    is: 'eblo-album',
+
+    properties: {
+      selected: 0,
+
+      latitude:  { type: Number, value: null, notify: true },
+      longitude: { type: Number, value: null, notify: true },
+      accuracy:  { type: Number, value: 50, notify: true },
+      points:    { type: Array, value: [], notify: true }
+    },
+
+    ebloGypsyReady: function(evt) {
+      this.points.push( { latitude: evt.detail.gypsy.lat.float, longitude: evt.detail.gypsy.lon.float } );
+      this.recalcLatLon();
+    },
+
+    recalcLatLon: function() {
+      var lat = 0;
+      var lon = 0;
+
+      this.points.forEach(function(p) {
+        lat += p.latitude;
+        lon += p.longitude;
+      });
+
+      this.latitude  = lat / this.points.length;
+      this.longitude = lon / this.points.length;
+    }
+
+  });
+})();
+</script>

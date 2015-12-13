@@ -26,7 +26,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin-bottom: 1.4em;
       }
 
-      paper-icon-button {
+      :host paper-icon-button {
         top: 2px;
         left: 2px;
         z-index: 10002;
@@ -129,6 +129,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       },
 
       adjustWidthHeightByImage: function() {
+        if (!this.image) {
+          return;
+        }
         /**
         *  http://www.daveperrett.com/articles/2012/07/28/exif-orientation-handling-is-a-ghetto/
         *
@@ -146,48 +149,54 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         *        use scale(-1, 1) for mirroring
         *        https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/scale
         */
-        var w = 0, h = 0, a = 0;
-        if (this.image) {
-          switch (this.getExifTag('Orientation')) {
-            case 3:
-              w = this.image.width;
-              h = this.image.height;
-              a = Math.PI;
-              break;
-            case 6:
-              w = this.image.height;
-              h = this.image.width;
-              a = Math.PI / 2.0;
-              break;
-            case 8:
-              w = this.image.height;
-              h = this.image.width;
-              a = - Math.PI / 2.0;
-              break;
-            default:
-              w = this.image.width;
-              h = this.image.height;
-              a = 0;
-              break;
-          }
+
+        this.image.canvasRatio = this.image.width / this.image.height;
+
+        switch (this.getExifTag('Orientation')) {
+          case 3:
+            this.image.canvasAngle = Math.PI;
+            this.image.canvasWidth = Math.min(this.width || this.image.width, this.image.width);
+            this.image.canvasHeight = Math.min(this.height || this.image.height, this.image.height);
+            if (!this.width && this.height) {
+              this.image.canvasWidth = Math.min(this.image.canvasHeight * this.image.canvasRatio, this.image.width);
+            } else if (this.width && !this.height) {
+              this.image.canvasHeight = Math.min(this.image.canvasWidth / this.image.canvasRatio, this.image.height);
+            }
+            break;
+          case 6:
+            this.image.canvasAngle = Math.PI / 2.0;
+            this.image.canvasWidth = Math.min(this.width || this.image.height, this.image.height);
+            this.image.canvasHeight = Math.min(this.height || this.image.width, this.image.width);
+            if (!this.width && this.height) {
+              this.image.canvasWidth = Math.min(this.image.canvasHeight / this.image.canvasRatio, this.image.height);
+            } else if (this.width && !this.height) {
+              this.image.canvasHeight = Math.min(this.image.canvasWidth * this.image.canvasRatio, this.image.width);
+            }
+            break;
+          case 8:
+            this.image.canvasAngle = - Math.PI / 2.0;
+            this.image.canvasWidth = Math.min(this.width || this.image.height, this.image.height);
+            this.image.canvasHeight = Math.min(this.height || this.image.width, this.image.width);
+            if (!this.width && this.height) {
+              this.image.canvasWidth = Math.min(this.image.canvasHeight / this.image.canvasRatio, this.image.height);
+            } else if (this.width && !this.height) {
+              this.image.canvasHeight = Math.min(this.image.canvasWidth * this.image.canvasRatio, this.image.width);
+            }
+            break;
+          default:
+            this.image.canvasAngle = 0;
+            this.image.canvasWidth = Math.min(this.width || this.image.width, this.image.width);
+            this.image.canvasHeight = Math.min(this.height || this.image.height, this.image.height);
+            if (!this.width && this.height) {
+              this.image.canvasWidth = Math.min(this.image.canvasHeight * this.image.canvasRatio, this.image.width);
+            } else if (this.width && !this.height) {
+              this.image.canvasHeight = Math.min(this.image.canvasWidth / this.image.canvasRatio, this.image.height);
+            }
+            break;
         }
 
-        if (this.width && this.height || !this.image) {
-          // do nothing
-        } else if (this.width && w) {
-          this.height = Math.round(h * this.width / w);
-        } else if (this.height && h) {
-          this.width = Math.round(w * this.height / h);
-        } else if (w && h) {
-          this.width = w;
-          this.height = h;
-        }
-
-        if (this.image) {
-          this.image.canvasAngle = a;
-          this.image.canvasWidth = this.width;
-          this.image.canvasHeight = this.height;
-        }
+        this.width = this.image.canvasWidth;
+        this.height = this.image.canvasHeight;
       },
 
       getExifTag: function(name) {
@@ -281,20 +290,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       },
 
       onIronResize: function(evt) {
-        var w = Math.floor(this.parent.offsetWidth - 60);
-
-        if (this.image && this.image.width <= w) {
-          return;
-        }
-
         if (this.parent.offsetWidth) {
-          // TODO use scale on underlying canvas!!!
-          var ratio = this.height / this.width;
-          this.width = w;
-          this.height = Math.floor(ratio * w);
+          this.width = Math.floor(this.parent.offsetWidth - 60);
+          this.height = null;
           if (this.image) {
-            this.image.canvasWidth = this.width;
-            this.image.canvasHeight = this.height;
+            this.adjustWidthHeightByImage();
             this.$.canvas.onCamanify();
           }
         }

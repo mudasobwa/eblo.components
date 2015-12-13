@@ -9,6 +9,7 @@
     "paper-elements": "PolymerElements/paper-elements#^1.0.1",
     "platinum-elements": "PolymerElements/platinum-elements#^1.1.0",
     "neon-elements": "PolymerElements/neon-elements#^1.0.0",
+    "leaflet-map": "leaflet-extras/leaflet-map",
     "page": "visionmedia/page.js#~1.6.3"
   },
   "devDependencies": {
